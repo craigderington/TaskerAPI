@@ -311,7 +311,7 @@ def send_email(to, subject, msg_body, **kwargs):
         sender=app.config['MAIL_DEFAULT_SENDER'],
         recipients=[to, ]
     )
-    msg.body = "EARL Dealer Demo UI Test"
+    msg.body = "Tasker API"
     msg.html = msg_body
     send_async_email.delay(msg)
 
