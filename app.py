@@ -13,7 +13,7 @@ from datetime import datetime
 import json
 import config
 
-
+# define app 
 app = Flask(__name__)
 
 # define our login_manager
@@ -91,7 +91,7 @@ def send_async_email(msg):
         mail.send(msg)
 
 
-# marshal fields
+# fields for marshalling
 task_fields = {
     'id': fields.Integer,
     'user_id': fields.Integer,
