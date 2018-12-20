@@ -106,6 +106,9 @@ class Task(Base):
                 self.task_name
             )
 
+    def as_dict(self):
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
 
 class TaskReminder(Base):
     __tablename__ = 'task_reminders'

@@ -10,6 +10,7 @@ from models import Task, TaskType, User
 from flask_mail import Mail, Message
 from schemas import task_schema
 from datetime import datetime
+import uuid
 import json
 import config
 
@@ -109,7 +110,7 @@ task_fields = {
 }
 
 
-class TaskListAPI(Resource):
+class Tasks(Resource):
     """
     API Resource for listing all tasks from the database.
     Provides the endpoint for creating new tasks
@@ -161,26 +162,86 @@ class TaskListAPI(Resource):
         except exc.SQLAlchemyError as db_err:
             return {'error': str(db_err)}
 
+    @login_required
     def post(self):
-        try:
-            args = self.reqparse.parse_args()
+        """
+        Process the POST data if json
+        :return: resp
+        """
+
+        if request.is_json:
             data = request.get_json()
-            task = task_schema.make_task(data)
-            m_data = marshal(task, task_fields)
 
-            resp = Response(
-                response=json.dumps(m_data),
-                status=201,
-                mimetype='application/json'
-            )
+            # try task type
+            try:
+                # get an instance of task type
+                task_type = db_session.query(TaskType).get(1)
 
-            return resp
+                try:
 
-        except Exception as e:
-            return {'error': str(e)}
+                    # create a new task
+                    task = Task(
+                        task_name=data['task_name'],
+                        task_description=data['task_description'],
+                        user_id=int(current_user.id),
+                        task_uuid=str(uuid.uuid4()),
+                        task_type=task_type,
+                        task_due_date=data['task_due_date'],
+                        task_completed=False,
+                        task_reminders=False,
+                        task_uri='/tasks/'
+                    )
+
+                    # add object to the database
+                    db_session.add(task)
+
+                    # commit to database
+                    db_session.commit()
+
+                    # flush the database
+                    db_session.flush()
+
+                    # assign the newly created task ID a variable
+                    task_id = task.id
+
+                    # update the task uri with the new ID
+                    task.task_uri = '/tasks/{}'.format(str(task_id))
+
+                    # update the task
+                    db_session.commit()
+
+                    # serialize the object for output to json
+                    _task = task.as_dict()
+
+                    # return the response with the new task ID
+                    resp = Response(
+                        response=json.dumps(_task, default=convert_datetime_object),
+                        status=201,
+                        mimetype='application/json'
+                    )
+
+                    return resp
+
+                # exception creating the task
+                except exc.SQLAlchemyError as err:
+                    print(str(err))
+
+            # exception getting tasks types
+            except exc.SQLAlchemyError as db_err:
+                print(str(db_err))
+
+        # return the response with a message
+        msg = {'message': 'the data POSTED\'ed is not in the correct format.  please try again'}
+        resp = Response(
+            response=json.dumps(str(msg)),
+            status=200,
+            mimetype='application/json'
+        )
+
+        return resp
 
 
-class TaskAPI(Resource):
+class Task(Resource):
     """
     API Resource for retrieving, modifying, updating and deleting a single
     task, by ID.
@@ -263,6 +324,66 @@ class TaskAPI(Resource):
             return {'error': str(e)}
 
 
+class TaskReminders(Resource):
+    """
+    Task Reminder Resource - Get all Reminder for a Task
+    :param task_id
+    :param user_id int
+    :return task reminder
+    """
+
+    def __init__(self):
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument('task_id')
+        self.reqparse.add_argument('user_id')
+        self.reqparse.add_argument('reminder_type')
+        self.reqparse.add_argument('reminder_date')
+        self.reqparse.add_argument('reminder_text')
+        self.reqparse.add_argument('reminder_delta_type')
+        self.reqparse.add_argument('reminder_delta_value')
+        super(TaskReminders, self).__init__()
+
+    @login_required
+    def get(self, task_id):
+        pass
+
+    @login_required
+    def post(self, task_id):
+        pass
+
+
+class TaskReminder(Resource):
+    """
+    Task Reminder Resource
+    :param reminder_id int
+    :param user_id int
+    :return task reminder
+    """
+
+    def __init__(self):
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument('task_id')
+        self.reqparse.add_argument('user_id')
+        self.reqparse.add_argument('reminder_type')
+        self.reqparse.add_argument('reminder_date')
+        self.reqparse.add_argument('reminder_text')
+        self.reqparse.add_argument('reminder_delta_type')
+        self.reqparse.add_argument('reminder_delta_value')
+        super(TaskReminder, self).__init__()
+
+    @login_required
+    def get(self, reminder_id):
+        pass
+
+    @login_required
+    def put(self, reminder_id):
+        pass
+
+    @login_required
+    def delete(self, reminder_id):
+        pass
+
+
 class UserLogin(Resource):
     """
     User Login Resource
@@ -316,9 +437,17 @@ def send_email(to, subject, msg_body, **kwargs):
     send_async_email.delay(msg)
 
 
+# convert datetime objects to str for json serilization
+def convert_datetime_object(o):
+    if isinstance(o, datetime):
+        return o.__str__()
+
+
 # register the API resources and define endpoints
-api.add_resource(TaskListAPI, '/api/v1.0/tasks', endpoint='tasks')
-api.add_resource(TaskAPI, '/api/v1.0/tasks/<int:id>', endpoint='task')
+api.add_resource(Tasks, '/api/v1.0/tasks', endpoint='tasks')
+api.add_resource(Task, '/api/v1.0/tasks/<int:id>', endpoint='task')
+api.add_resource(TaskReminders, '/api/v1.0/tasks/<int:id>/reminders', endpoint='reminders')
+api.add_resource(TaskReminder, '/api/v1.0/tasks/<int:id>/reminder/<int:id>', endpoint='reminder')
 api.add_resource(UserLogin, '/api/v1.0/auth/login', endpoint='login')
 
 
