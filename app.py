@@ -14,7 +14,7 @@ import uuid
 import json
 import config
 
-
+# define app 
 app = Flask(__name__)
 
 # define our login_manager
@@ -92,7 +92,7 @@ def send_async_email(msg):
         mail.send(msg)
 
 
-# marshal fields
+# fields for marshalling
 task_fields = {
     'id': fields.Integer,
     'user_id': fields.Integer,
@@ -432,7 +432,7 @@ def send_email(to, subject, msg_body, **kwargs):
         sender=app.config['MAIL_DEFAULT_SENDER'],
         recipients=[to, ]
     )
-    msg.body = "EARL Dealer Demo UI Test"
+    msg.body = "Tasker API"
     msg.html = msg_body
     send_async_email.delay(msg)
 
