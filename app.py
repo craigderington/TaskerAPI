@@ -322,17 +322,18 @@ class TaskAPI(Resource):
                 mimetype='application/json'
             )
 
+            # return the reponse
             return resp
 
     @login_required
-    def put(self, id):
+    def put(self, task_id):
         try:
             pass
         except Exception as e:
             return {'error': str(e)}
 
     @login_required
-    def delete(self, id):
+    def delete(self, task_id):
         try:
             pass
         except Exception as e:
