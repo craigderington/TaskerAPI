@@ -8,7 +8,6 @@ from celery import Celery
 from database import db_session
 from models import Task, TaskType, User
 from flask_mail import Mail, Message
-from schemas import task_schema
 from datetime import datetime
 import uuid
 import json
@@ -94,7 +93,7 @@ def send_async_email(msg):
 
 # fields for marshalling
 task_fields = {
-    'id': fields.Integer,
+    'task_id': fields.Integer,
     'user_id': fields.Integer,
     'task_uuid': fields.String,
     'task_type': fields.String,
@@ -110,7 +109,7 @@ task_fields = {
 }
 
 
-class Tasks(Resource):
+class TasksListAPI(Resource):
     """
     API Resource for listing all tasks from the database.
     Provides the endpoint for creating new tasks
@@ -137,30 +136,41 @@ class Tasks(Resource):
         self.reqparse.add_argument('task_uri', type=str, required=False,
                                    help='The full URL path to the requested resource')
 
-        super(TaskListAPI, self).__init__()
+        super(TasksListAPI, self).__init__()
 
     @login_required
     def get(self):
+        """
+        Return a list of all Tasks for the current_user
+        :param user_id int
+        :return: json list
+        """
+        tasks = []
+
         try:
-            tasks = db_session.query(Task).filter(
-                Task.user_id == current_user.id
-            ).all()
+            for task in db_session.query(Task).filter(Task.user_id == current_user.id).order_by(Task.id.asc()).all():
+                tasks.append(task.as_dict())
 
-            if tasks:
-                # marshal the fields
-                m_data = marshal(tasks, task_fields)
-                resp = Response(
-                    response=json.dumps(m_data),
-                    status=200,
-                    mimetype='application/json'
-                )
+            # format the response
+            resp = Response(
+                response=json.dumps(tasks, default=convert_datetime_object),
+                status=200,
+                mimetype='application/json'
+            )
 
-                return resp
+            # return response
+            return resp
 
-            return {'tasks': 'No Tasks Found for ID...'}
-
+        # alchemy exception
         except exc.SQLAlchemyError as db_err:
-            return {'error': str(db_err)}
+            msg = {'Database Error': str(db_err)}
+            resp = Response(
+                response=json.dumps(msg),
+                status=200,
+                mimetype='application/json'
+            )
+
+            return resp
 
     @login_required
     def post(self):
@@ -241,7 +251,7 @@ class Tasks(Resource):
         return resp
 
 
-class Task(Resource):
+class TaskAPI(Resource):
     """
     API Resource for retrieving, modifying, updating and deleting a single
     task, by ID.
@@ -251,8 +261,10 @@ class Task(Resource):
 
     def __init__(self):
         self.reqparse = reqparse.RequestParser()
-        self.reqparse.add_argument('id', type=int, required=False,
+        self.reqparse.add_argument('task_id', type=int, required=False,
                                    help='The API URL\'s ID of the task.')
+        self.reqparse.add_argument('task_uuid', type=int, required=False,
+                                   help='The task\'s unique identifier')
         self.reqparse.add_argument('task_name', type=str, required=True,
                                    help='The name of the user task.',
                                    location='args')
@@ -276,17 +288,17 @@ class Task(Resource):
         super(TaskAPI, self).__init__()
 
     @login_required
-    def get(self, id):
+    def get(self, task_id):
         try:
             task = db_session.query(Task).filter(
-                Task.id == id,
+                Task.id == task_id,
                 Task.user_id == g.user.id
             ).first()
 
             if task:
-                m_data = marshal(task, task_fields)
+                task = task.as_dict()
                 resp = Response(
-                    response=json.dumps(m_data),
+                    response=json.dumps(task, default=convert_datetime_object),
                     status=200,
                     mimetype='application/json'
                 )
@@ -299,14 +311,17 @@ class Task(Resource):
                     mimetype='application/json'
                 )
 
+            # return the response
             return resp
 
         except exc.SQLAlchemyError as db_err:
+            msg = {'Database Error': str(db_err)}
             resp = Response(
-                response=str(db_err),
+                response=json.dumps(msg),
                 status=200,
                 mimetype='application/json'
             )
+
             return resp
 
     @login_required
@@ -324,7 +339,7 @@ class Task(Resource):
             return {'error': str(e)}
 
 
-class TaskReminders(Resource):
+class TaskRemindersAPI(Resource):
     """
     Task Reminder Resource - Get all Reminder for a Task
     :param task_id
@@ -341,7 +356,7 @@ class TaskReminders(Resource):
         self.reqparse.add_argument('reminder_text')
         self.reqparse.add_argument('reminder_delta_type')
         self.reqparse.add_argument('reminder_delta_value')
-        super(TaskReminders, self).__init__()
+        super(TaskRemindersAPI, self).__init__()
 
     @login_required
     def get(self, task_id):
@@ -352,7 +367,7 @@ class TaskReminders(Resource):
         pass
 
 
-class TaskReminder(Resource):
+class TaskReminderAPI(Resource):
     """
     Task Reminder Resource
     :param reminder_id int
@@ -369,7 +384,7 @@ class TaskReminder(Resource):
         self.reqparse.add_argument('reminder_text')
         self.reqparse.add_argument('reminder_delta_type')
         self.reqparse.add_argument('reminder_delta_value')
-        super(TaskReminder, self).__init__()
+        super(TaskReminderAPI, self).__init__()
 
     @login_required
     def get(self, reminder_id):
@@ -384,7 +399,7 @@ class TaskReminder(Resource):
         pass
 
 
-class UserLogin(Resource):
+class UserLoginAPI(Resource):
     """
     User Login Resource
     :param username, password
@@ -395,7 +410,7 @@ class UserLogin(Resource):
         self.reqparse = reqparse.RequestParser()
         self.reqparse.add_argument('username')
         self.reqparse.add_argument('password')
-        super(UserLogin, self).__init__()
+        super(UserLoginAPI, self).__init__()
 
     def post(self):
         """
@@ -444,11 +459,11 @@ def convert_datetime_object(o):
 
 
 # register the API resources and define endpoints
-api.add_resource(Tasks, '/api/v1.0/tasks', endpoint='tasks')
-api.add_resource(Task, '/api/v1.0/tasks/<int:id>', endpoint='task')
-api.add_resource(TaskReminders, '/api/v1.0/tasks/<int:id>/reminders', endpoint='reminders')
-api.add_resource(TaskReminder, '/api/v1.0/tasks/<int:id>/reminder/<int:id>', endpoint='reminder')
-api.add_resource(UserLogin, '/api/v1.0/auth/login', endpoint='login')
+api.add_resource(TasksListAPI, '/api/v1.0/tasks', endpoint='tasks')
+api.add_resource(TaskAPI, '/api/v1.0/tasks/<int:task_id>', endpoint='task')
+api.add_resource(TaskRemindersAPI, '/api/v1.0/tasks/<int:task_id>/reminders', endpoint='reminders')
+api.add_resource(TaskReminderAPI, '/api/v1.0/tasks/<int:task_id>/reminder/<int:reminder_id>', endpoint='reminder')
+api.add_resource(UserLoginAPI, '/api/v1.0/auth/login', endpoint='login')
 
 
 if __name__ == '__main__':
