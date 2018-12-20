@@ -332,6 +332,11 @@ class TaskAPI(Resource):
 
     @login_required
     def put(self, task_id):
+        """
+        Update a single instance of a task by ID
+        :param task_id:
+        :return: task
+        """
         try:
             pass
         except Exception as e:
@@ -339,6 +344,11 @@ class TaskAPI(Resource):
 
     @login_required
     def delete(self, task_id):
+        """
+        Delete a single instance of a task
+        :param task_id:
+        :return: none
+        """
         try:
             pass
         except Exception as e:
