@@ -289,6 +289,11 @@ class TaskAPI(Resource):
 
     @login_required
     def get(self, task_id):
+        """
+        Return a single instance of a task by ID
+        :param task_id:
+        :return: task
+        """
         try:
             task = db_session.query(Task).filter(
                 Task.id == task_id,
